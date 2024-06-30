@@ -107,7 +107,7 @@ func main() {
 				},
 			)
 			if err != nil {
-				respondWithError(w, 500, "Failed to create user")
+				respondWithError(w, 500, "Failed to create feed")
 				fmt.Fprintf(os.Stderr, "%v\n", err)
 				return
 			}
