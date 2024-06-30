@@ -184,6 +184,19 @@ func main() {
 		}),
 	)
 
+	mux.HandleFunc(
+		"GET /v1/feed_follow",
+		cfg.middlewareAuth(func(w http.ResponseWriter, r *http.Request, user database.User) {
+			feeds, err := cfg.DB.AllFeedFollowsByUser(ctx, user.ID)
+			if err != nil {
+				respondWithError(w, 404, "FAiled to find your feed follows")
+				return
+			}
+
+			respondWithJSON(w, 200, feeds)
+		}),
+	)
+
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,
