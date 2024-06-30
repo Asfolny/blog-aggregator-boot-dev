@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -8,7 +10,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+
+	"github.com/Asfolny/blog-aggregator-boot-dev/internal/database"
 )
 
 func main() {
@@ -16,6 +22,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	dbURL := os.Getenv("DB_CONN")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dbQueries := database.New(db)
+	ctx := context.Background()
 
 	port := os.Getenv("PORT")
 
@@ -29,6 +44,32 @@ func main() {
 	// Test the respondWithError function
 	mux.HandleFunc("GET /v1/err", func(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, 500, "Internal Server Error")
+	})
+
+	mux.HandleFunc("POST /v1/users", func(w http.ResponseWriter, r *http.Request) {
+		type createUserInput struct {
+			Name string `json:"name"`
+		}
+		var input createUserInput
+
+		err := json.NewDecoder(r.Body).Decode(&input)
+		if err != nil {
+			respondWithError(w, 400, "Invalid body to create user")
+			return
+		}
+
+		uuid := uuid.New()
+		user, err := dbQueries.CreateUser(
+			ctx,
+			database.CreateUserParams{ID: uuid, Name: input.Name},
+		)
+		if err != nil {
+			respondWithError(w, 500, "Failed to create user")
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return
+		}
+
+		respondWithJSON(w, 201, user)
 	})
 
 	server := &http.Server{
@@ -50,7 +91,7 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	dat, err := json.Marshal(payload)
 	if err != nil {
-		log.Printf("Error marshalling JSON: %s", err)
+		fmt.Fprintf(os.Stderr, "Error marshalling JSON: %s\n", err)
 		w.WriteHeader(500)
 		return
 	}
@@ -59,13 +100,13 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	_, writeErr := w.Write(dat)
 
 	if writeErr != nil {
-		log.Printf("Write failes: %v", err)
+		fmt.Fprintf(os.Stderr, "Write failes: %v\n", err)
 	}
 }
 
 func respondWithError(w http.ResponseWriter, code int, msg string) {
 	if code >= 500 {
-		log.Printf("Responding with 5XX error: %s", msg)
+		fmt.Fprintf(os.Stderr, "Responding with 5XX error: %s\n", msg)
 	}
 
 	type errorResponse struct {
@@ -75,4 +116,8 @@ func respondWithError(w http.ResponseWriter, code int, msg string) {
 	respondWithJSON(w, code, errorResponse{
 		Error: msg,
 	})
+}
+
+type apiConfig struct {
+	DB *database.Queries
 }
