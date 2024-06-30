@@ -74,6 +74,41 @@ func main() {
 		respondWithJSON(w, 201, user)
 	})
 
+	mux.HandleFunc("GET /v1/users", func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		splitAuth := strings.Split(authHeader, " ")
+
+		if len(splitAuth) < 2 {
+			respondWithError(
+				w,
+				400,
+				"To get get user, please send Authorization: ApiKey <KEY> header",
+			)
+			return
+		}
+
+		if splitAuth[0] != "ApiKey" {
+			respondWithError(
+				w,
+				400,
+				"To get get user, please send Authorization: ApiKey <KEY> header",
+			)
+			return
+		}
+
+		user, err := dbQueries.GetUserByApiKey(
+			ctx,
+			splitAuth[1],
+		)
+		if err != nil {
+			respondWithError(w, 404, "Failed to find user by API Key")
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return
+		}
+
+		respondWithJSON(w, 201, user)
+	})
+
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,
