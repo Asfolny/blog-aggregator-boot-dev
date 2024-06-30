@@ -116,6 +116,17 @@ func main() {
 		}),
 	)
 
+	mux.HandleFunc("GET /v1/feeds", func(w http.ResponseWriter, r *http.Request) {
+		feeds, err := cfg.DB.GetFeeds(ctx)
+		if err != nil {
+			respondWithError(w, 500, "Failed to get all feeds")
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return
+		}
+
+		respondWithJSON(w, 200, feeds)
+	})
+
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,
