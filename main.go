@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -48,7 +49,8 @@ func main() {
 
 	mux.HandleFunc("POST /v1/users", func(w http.ResponseWriter, r *http.Request) {
 		type createUserInput struct {
-			Name string `json:"name"`
+			Name   string `json:"name"`
+			ApiKey string `json:"api_key"`
 		}
 		var input createUserInput
 
@@ -61,7 +63,7 @@ func main() {
 		uuid := uuid.New()
 		user, err := dbQueries.CreateUser(
 			ctx,
-			database.CreateUserParams{ID: uuid, Name: input.Name},
+			database.CreateUserParams{ID: uuid, Name: input.Name, ApiKey: input.ApiKey},
 		)
 		if err != nil {
 			respondWithError(w, 500, "Failed to create user")
