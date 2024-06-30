@@ -210,6 +210,19 @@ func main() {
 		}),
 	)
 
+	mux.HandleFunc(
+		"GET /v1/posts",
+		cfg.middlewareAuth(func(w http.ResponseWriter, r *http.Request, user database.User) {
+			posts, err := cfg.DB.GetPostsByUser(ctx, user.ID)
+			if err != nil {
+				respondWithError(w, 404, "Failed to find user's interested posts")
+				return
+			}
+
+			respondWithJSON(w, 200, posts)
+		}),
+	)
+
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,
