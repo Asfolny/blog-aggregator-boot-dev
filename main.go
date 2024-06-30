@@ -158,6 +158,32 @@ func main() {
 		}),
 	)
 
+	mux.HandleFunc(
+		"DELETE /v1/feed_follow/{feedId}",
+		cfg.middlewareAuth(func(w http.ResponseWriter, r *http.Request, user database.User) {
+			feedId, err := uuid.Parse(r.PathValue("feedId"))
+			if err != nil {
+				respondWithError(w, 404, "Feed ID not found")
+				return
+			}
+
+			err = cfg.DB.DeleteFeedFollow(
+				ctx,
+				database.DeleteFeedFollowParams{
+					FeedID: feedId,
+					UserID: user.ID,
+				},
+			)
+			if err != nil {
+				respondWithError(w, 500, "Failed to delete feed follow")
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				return
+			}
+
+			respondWithJSON(w, 202, map[string]string{"message": "DONE"})
+		}),
+	)
+
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,
