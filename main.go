@@ -127,6 +127,37 @@ func main() {
 		respondWithJSON(w, 200, feeds)
 	})
 
+	mux.HandleFunc(
+		"POST /v1/feed_follow",
+		cfg.middlewareAuth(func(w http.ResponseWriter, r *http.Request, user database.User) {
+			type feedFollowCreateInput struct {
+				FeedId uuid.UUID `json:"feed_id"`
+			}
+			var input feedFollowCreateInput
+
+			err := json.NewDecoder(r.Body).Decode(&input)
+			if err != nil {
+				respondWithError(w, 400, "Invalid body to create feed follow")
+				return
+			}
+
+			feedFollow, err := cfg.DB.CreateFeedFollow(
+				ctx,
+				database.CreateFeedFollowParams{
+					FeedID: input.FeedId,
+					UserID: user.ID,
+				},
+			)
+			if err != nil {
+				respondWithError(w, 500, "Failed to create feed follow")
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				return
+			}
+
+			respondWithJSON(w, 201, feedFollow)
+		}),
+	)
+
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           mux,
