@@ -112,7 +112,17 @@ func main() {
 				return
 			}
 
-			respondWithJSON(w, 201, feed)
+			// Create a new feed follow for the user who added the feed
+			feedFollow, err := cfg.DB.CreateFeedFollow(ctx, database.CreateFeedFollowParams{
+				FeedID: feed.ID,
+				UserID: user.ID,
+			})
+
+			respondWithJSON(
+				w,
+				201,
+				map[string]interface{}{"feed": feed, "feed_folloow": feedFollow},
+			)
 		}),
 	)
 
