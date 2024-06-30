@@ -202,7 +202,7 @@ func main() {
 		cfg.middlewareAuth(func(w http.ResponseWriter, r *http.Request, user database.User) {
 			feeds, err := cfg.DB.AllFeedFollowsByUser(ctx, user.ID)
 			if err != nil {
-				respondWithError(w, 404, "FAiled to find your feed follows")
+				respondWithError(w, 404, "Failed to find your feed follows")
 				return
 			}
 
