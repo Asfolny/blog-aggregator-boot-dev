@@ -31,10 +31,9 @@ func main() {
 	}
 
 	dbQueries := database.New(db)
+	cfg := apiConfig{dbQueries}
 	ctx := context.Background()
-
 	port := os.Getenv("PORT")
-
 	mux := http.NewServeMux()
 
 	// Test the respondWithJSON function
@@ -74,40 +73,23 @@ func main() {
 		respondWithJSON(w, 201, user)
 	})
 
-	mux.HandleFunc("GET /v1/users", func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		splitAuth := strings.Split(authHeader, " ")
+	mux.HandleFunc(
+		"GET /v1/users",
+		cfg.middlewareAuth(func(w http.ResponseWriter, r *http.Request, user database.User) {
+			respondWithJSON(w, 201, user)
+		}),
+	)
 
-		if len(splitAuth) < 2 {
-			respondWithError(
-				w,
-				400,
-				"To get get user, please send Authorization: ApiKey <KEY> header",
 			)
-			return
-		}
+			if err != nil {
+				respondWithError(w, 500, "Failed to create user")
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				return
+			}
 
-		if splitAuth[0] != "ApiKey" {
-			respondWithError(
-				w,
-				400,
-				"To get get user, please send Authorization: ApiKey <KEY> header",
-			)
-			return
-		}
-
-		user, err := dbQueries.GetUserByApiKey(
-			ctx,
-			splitAuth[1],
-		)
-		if err != nil {
-			respondWithError(w, 404, "Failed to find user by API Key")
-			fmt.Fprintf(os.Stderr, "%v\n", err)
-			return
-		}
-
-		respondWithJSON(w, 201, user)
-	})
+			respondWithJSON(w, 201, feed)
+		}),
+	)
 
 	server := &http.Server{
 		Addr:              ":" + port,
@@ -158,3 +140,30 @@ func respondWithError(w http.ResponseWriter, code int, msg string) {
 type apiConfig struct {
 	DB *database.Queries
 }
+
+func (cfg *apiConfig) middlewareAuth(handler authedHandler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		splitAuth := strings.Split(authHeader, " ")
+
+		if len(splitAuth) < 2 || splitAuth[0] != "ApiKey" {
+			respondWithError(
+				w,
+				400,
+				"To get get user, please send Authorization: ApiKey <KEY> header",
+			)
+			return
+		}
+
+		user, err := cfg.DB.GetUserByApiKey(context.Background(), splitAuth[1])
+		if err != nil {
+			respondWithError(w, 404, "Failed to find user by API Key")
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+			return
+		}
+
+		handler(w, r, user)
+	}
+}
+
+type authedHandler func(http.ResponseWriter, *http.Request, database.User)
