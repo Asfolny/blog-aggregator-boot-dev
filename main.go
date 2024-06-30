@@ -4,11 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -214,12 +217,76 @@ func main() {
 		ReadHeaderTimeout: 2 * time.Second,
 	}
 
+	go scraper(10, cfg)
+
 	fmt.Printf("Server starting on %v\n", server.Addr)
 
 	err = server.ListenAndServe()
 	if err != nil {
 		log.Fatal(err)
 	}
+}
+
+func scraper(limit int32, apiCfg apiConfig) {
+	fmt.Println("Starting scraper worker")
+	ctx := context.Background()
+
+	for {
+		feeds, err := apiCfg.DB.GetNextFeedsToFetch(ctx, limit)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		var wg sync.WaitGroup
+		for _, feed := range feeds {
+			wg.Add(1)
+			go scrapeFeed(feed.Url)
+		}
+
+		wg.Wait()
+
+		time.Sleep(10 * time.Second)
+	}
+}
+
+func scrapeFeed(url string) {
+	response, err := http.Get(url)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to fetch feed %s\n", url)
+		return
+	}
+	defer response.Body.Close()
+
+	type RssChannelItem struct {
+		XMLName     xml.Name `xml:"item"`
+		Title       string   `xml:"title"`
+		Link        string   `xml:"link"`
+		PubDate     string   `xml:"pubDate"`
+		Description string   `xml:"description"`
+	}
+
+	type RssFeed struct {
+		RssChannel struct {
+			XMLName xml.Name         `xml:"channel"`
+			Title   string           `xml:"title"`
+			Items   []RssChannelItem `xml:"item"`
+		} `xml:"channel"`
+	}
+
+	dat, err := io.ReadAll(response.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get the full body of %v; %v\n", url, err)
+		return
+	}
+
+	var xmlResp RssFeed
+	err = xml.Unmarshal(dat, &xmlResp)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to parse xml %v\n", err)
+		return
+	}
+
+	fmt.Printf("%v\n", xmlResp)
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
