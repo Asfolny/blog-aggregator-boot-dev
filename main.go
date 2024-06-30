@@ -80,6 +80,31 @@ func main() {
 		}),
 	)
 
+	mux.HandleFunc(
+		"POST /v1/feeds",
+		cfg.middlewareAuth(func(w http.ResponseWriter, r *http.Request, user database.User) {
+			type createFeedsInput struct {
+				Name string `json:"name"`
+				Url  string `json:"url"`
+			}
+
+			var input createFeedsInput
+
+			err := json.NewDecoder(r.Body).Decode(&input)
+			if err != nil {
+				respondWithError(w, 400, "Invalid body to create feed")
+				return
+			}
+
+			uuid := uuid.New()
+			feed, err := cfg.DB.CreateFeed(
+				ctx,
+				database.CreateFeedParams{
+					ID:     uuid,
+					Name:   input.Name,
+					Url:    input.Url,
+					UserID: user.ID,
+				},
 			)
 			if err != nil {
 				respondWithError(w, 500, "Failed to create user")
