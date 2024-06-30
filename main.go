@@ -253,7 +253,7 @@ func scraper(limit int32, apiCfg apiConfig) {
 		var wg sync.WaitGroup
 		for _, feed := range feeds {
 			wg.Add(1)
-			go scrapeFeed(feed.Url)
+			go scrapeFeed(feed.Url, feed.ID, apiCfg.DB)
 		}
 
 		wg.Wait()
@@ -262,7 +262,7 @@ func scraper(limit int32, apiCfg apiConfig) {
 	}
 }
 
-func scrapeFeed(url string) {
+func scrapeFeed(url string, feedId uuid.UUID, db *database.Queries) {
 	response, err := http.Get(url)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to fetch feed %s\n", url)
@@ -299,7 +299,26 @@ func scrapeFeed(url string) {
 		return
 	}
 
-	fmt.Printf("%v\n", xmlResp)
+	for _, item := range xmlResp.RssChannel.Items {
+		pubDate, timeParseErr := time.Parse("Mon, 02 Jan 2006 15:04:05 -0700", item.PubDate)
+		publishedAt := sql.NullTime{Time: pubDate, Valid: true}
+
+		if timeParseErr != nil {
+			publishedAt.Valid = false
+		}
+
+		_, err = db.CreatePost(context.Background(), database.CreatePostParams{
+			ID:          uuid.New(),
+			Title:       item.Title,
+			Url:         item.Link,
+			Description: sql.NullString{String: item.Description, Valid: true},
+			FeedID:      feedId,
+			PublishedAt: publishedAt,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v\n", err)
+		}
+	}
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
